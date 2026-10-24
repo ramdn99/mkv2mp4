@@ -43,7 +43,7 @@ On Linux you may need `sudo apt install python3-tk` for the window to open.
 
 ---
 
-## 2. Usage (the whole interface)
+## 2b. Usage (the whole interface)
 
 ```
 python mkv2mp4.py movie.mkv                  # convert one file (MP4 appears next to it)
