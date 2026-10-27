@@ -10,7 +10,7 @@ Usage (that's all - it picks the best settings itself and starts right away):
 
 What it decides automatically, per stream:
     video     copied untouched (lossless) when MP4 can hold the codec, else re-encoded visually lossless
-    audio     copied when MP4-safe; lossless audio -> lossless ALAC; other formats -> high-bitrate AAC
+    audio     AAC/MP3 copied untouched; everything else -> high-bitrate AAC (plays in browsers and web players)
     subtitles text subs embedded (ASS originals also saved as .ass); picture subs (PGS/VobSub)
               saved as side files because MP4 cannot hold them
 Languages, track names, default/forced flags and chapters are kept. Existing MP4s are never overwritten.
@@ -44,10 +44,11 @@ MKV_EXTENSIONS = {".mkv", ".mk3d"}
 # Video codecs that ffmpeg can store in MP4 and that players widely understand.
 MP4_VIDEO_COPY = {"h264", "hevc", "av1", "vp9", "mpeg4"}
 
-# Audio codecs that are safe to copy into MP4.
-MP4_AUDIO_COPY = {"aac", "ac3", "eac3", "mp3", "alac"}
+# Audio codecs copied untouched. Only AAC and MP3 are decoded by every browser / web player / phone / TV.
+# (AC3, E-AC3, ALAC, DTS... fit inside an MP4 file, but Chrome, Firefox and many web players can't play them.)
+MP4_AUDIO_COPY = {"aac", "mp3"}
 
-# Audio codecs that are lossless (kept lossless by converting to ALAC).
+# Audio codecs that are lossless (only used to word the explanation).
 LOSSLESS_AUDIO = {"flac", "truehd", "mlp", "alac"}
 
 # Text-based subtitle codecs -> can become mov_text (the MP4 subtitle format).
@@ -403,7 +404,7 @@ def describe(s: Stream) -> str:
 class Item:
     stream: Stream
     action: str            # copy | convert | reencode | extract | skip
-    target: str = ""       # e.g. "aac", "alac", "mov_text", "libx264"
+    target: str = ""       # e.g. "aac", "mov_text", "libx264"
     reason: str = ""
     extra: str = ""
     params: dict = field(default_factory=dict)
@@ -458,20 +459,21 @@ def plan_video(s: Stream, plan: Plan) -> Item:
 
 
 def plan_audio(s: Stream, args) -> Item:
-    ch = s.channels
     if s.codec in MP4_AUDIO_COPY:
         return Item(s, "copy", target="copy",
-                    reason=f"{s.codec} is MP4-compatible - copied untouched")
-    lossless = s.codec in LOSSLESS_AUDIO or s.codec.startswith("pcm_")
-    if lossless and ch <= 8:
-        return Item(s, "convert", target="alac",
-                    reason=f"{s.codec} is lossless - converted to lossless ALAC (bit-perfect)")
+                    reason=f"{s.codec} plays everywhere - copied untouched")
+    ch = s.channels
     bitrate = aac_bitrate(ch, args)
     params = {"bitrate": bitrate}
     if ch > 8:
         params["ac"] = 8
-    why = (f"{s.codec} isn't reliably supported in MP4 - converted to AAC {bitrate} "
-           "(lossy to lossy: small unavoidable loss)")
+    lossless = s.codec in LOSSLESS_AUDIO or s.codec.startswith("pcm_")
+    if lossless:
+        why = (f"{s.codec} is lossless but can't be played by browsers/web players inside MP4 - "
+               f"converted to AAC {bitrate} (near-transparent)")
+    else:
+        why = (f"{s.codec} fits in MP4 but browsers and many web players can't decode it - "
+               f"converted to AAC {bitrate} (lossy to lossy: small unavoidable loss)")
     return Item(s, "convert", target="aac", reason=why, params=params)
 
 
@@ -559,8 +561,6 @@ def codec_options(it: Item, letter: str, n: int, args) -> List[str]:
             opts += [f"-tag:v:{n}", "hvc1", f"-x265-params:v:{n}", "log-level=error"]
         return opts
     if s.kind == "audio":
-        if it.target == "alac":
-            return [c, "alac"]
         opts = [c, "aac", f"-b:a:{n}", it.params["bitrate"]]
         if "ac" in it.params:
             opts += [f"-ac:a:{n}", str(it.params["ac"])]
@@ -1046,9 +1046,10 @@ WHAT IT DECIDES AUTOMATICALLY (there are no other options)
   Video      Copied untouched (no quality loss) if MP4 supports the codec
              (H.264, HEVC, AV1, VP9, MPEG-4). Otherwise re-encoded visually
              lossless (x264 CRF 14 / x265 CRF 16 for 10-bit).
-  Audio      AAC, AC3, EAC3, MP3, ALAC: copied. FLAC, TrueHD, PCM: converted
-             to lossless ALAC. Anything else (DTS, Opus, Vorbis...): high
-             bitrate AAC. The channel count is always kept.
+  Audio      AAC and MP3 are copied untouched. Everything else (AC3, EAC3,
+             DTS, TrueHD, FLAC, Opus...) is converted to high-bitrate AAC,
+             because only AAC/MP3 play in web browsers, web players, phones
+             and smart TVs. The channel count is always kept.
   Subtitles  Text subtitles are embedded as MP4 tracks. ASS/SSA files are also
              saved separately to keep their styling. Picture subtitles
              (PGS/VobSub) can't live in MP4, so they are saved as .sup/.mks

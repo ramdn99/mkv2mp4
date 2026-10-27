@@ -43,7 +43,7 @@ On Linux you may need `sudo apt install python3-tk` for the window to open.
 
 ---
 
-## 2b. Usage (the whole interface)
+## 2. Usage (the whole interface)
 
 ```
 python mkv2mp4.py movie.mkv                  # convert one file (MP4 appears next to it)
@@ -73,8 +73,8 @@ Example of the plan it prints before converting:
      -> COPY: hevc fits in MP4 - copied untouched, tagged hvc1 for Apple devices
 #1  audio     eng dts (DTS-HD MA) 5.1(side)
      -> CONVERT: dts isn't reliably supported in MP4 - converted to AAC 640k
-#2  audio     eng eac3 5.1(side)
-     -> COPY: eac3 is MP4-compatible - copied untouched
+#2  audio     eng aac stereo
+     -> COPY: aac plays everywhere - copied untouched
 #3  subtitle  eng subrip [default]
      -> CONVERT: text subtitle - embedded as an MP4 subtitle track
 #4  subtitle  eng hdmv_pgs_subtitle
@@ -92,13 +92,14 @@ HEVC is tagged `hvc1` so iPhones, Macs and Apple TV can play it. Cover-art "vide
 ### Audio
 | Source codec | Action |
 |---|---|
-| AAC, AC3, EAC3, MP3, ALAC | **Copied** untouched |
-| FLAC, TrueHD, PCM (lossless) | Converted to **lossless ALAC** (bit-perfect) |
-| DTS, Opus, Vorbis, others | Converted to AAC at a high bitrate (128k mono, 256k stereo, 640k 5.1, 768k 7.1) |
+| AAC, MP3 | **Copied** untouched |
+| Everything else (AC3, EAC3, DTS, TrueHD, FLAC, Opus, Vorbis...) | Converted to **AAC** at a high bitrate (128k mono, 256k stereo, 640k 5.1, 768k 7.1) |
+
+Why not copy AC3/EAC3? They fit inside an MP4 file, but Chrome, Firefox and many web players (and some phones) can't decode them, and the video then refuses to play with an "unsupported audio codec" error. AAC and MP3 play everywhere.
 
 Channel count is always kept (no forced downmix/upmix).
 
-> **Honest note:** converting a *lossy* track (DTS, Opus, Vorbis) to AAC is lossy-to-lossy, so a tiny loss is unavoidable. ALAC plays on Apple devices, VLC, Plex and most modern players, but not on every TV. If a device refuses an ALAC track, that's the reason.
+> **Honest note:** converting any non-AAC track to AAC is a re-encode, so a tiny loss is unavoidable (at these bitrates it is very hard to hear). If you only play on a TV or home-theatre setup that handles Dolby/DTS and you want the original audio bit-for-bit, keep the MKV for that.
 
 ### Subtitles
 | Subtitle type | What happens |
@@ -154,13 +155,13 @@ Exit codes: `0` all good, `1` at least one file failed, `2` bad input or ffmpeg 
 ## 6. FAQ
 
 **Is it really lossless?**
-For video MP4 supports (H.264, HEVC, AV1, VP9, MPEG-4, which covers nearly all MKVs): yes, the video is copied, not re-encoded. Audio that's already AAC/AC3/EAC3/MP3/ALAC is copied too, and lossless audio stays lossless. The only lossy steps are re-encoding unsupported video codecs and converting unsupported lossy audio to AAC. The plan always shows which.
+For video MP4 supports (H.264, HEVC, AV1, VP9, MPEG-4, which covers nearly all MKVs): yes, the video is copied, not re-encoded. Audio that's already AAC or MP3 is copied too. The only lossy steps are re-encoding unsupported video codecs and converting other audio formats to AAC. The plan always shows which.
 
 **Why not just keep MKV?**
 If the only goal is "everything preserved", MKV is the better container. MP4 is for device compatibility (TVs, iPhones, editors, browsers).
 
 **My TV or phone won't play the MP4.**
-Usually the codec rather than the container: 10-bit H.264, HEVC on older devices, or ALAC audio. Check the warnings in the plan.
+Usually the codec rather than the container: 10-bit H.264, or HEVC video on browsers/devices without HEVC support. Check the warnings in the plan.
 
 **I want burned-in subtitles or other custom behaviour.**
 This version deliberately has no extra options. Picture subtitles are saved as side files, which keeps full quality and avoids re-encoding.
